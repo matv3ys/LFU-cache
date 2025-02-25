@@ -18,7 +18,6 @@ namespace
 #endif /* DEBUG */
 
 namespace caches {
-//TODO add type for value
 template <typename KeyT, typename ValueT>
 class LFUCache 
 {
@@ -45,8 +44,55 @@ class LFUCache
 			if (next != nullptr)
 				next->prev = this;
 		}
+		FreqNode(const FreqNode& other) = delete;
+		FreqNode(FreqNode&& other) = delete;
+		FreqNode& operator=(const FreqNode& other) = delete;
+		FreqNode& operator=(FreqNode&& other) = delete;
 		~FreqNode() = default;
 	};
+
+	class FreqList 
+	{
+		FreqNode *first_elem_ = nullptr;
+
+		void clear_list()
+		{
+			FreqNode *tmp;
+			while (first_elem != nullptr)
+			{
+				tmp = first_elem;
+				first_elem = tmp->next;
+				delete tmp
+			}
+		}
+
+	public:
+		FreqList() = default;
+
+		FreqList(const FreqList& other) = delete;
+		FreqList(FreqList&& other)
+		{
+			first_elem_ = other.first_elem_;
+			other.first_elem_ = nullptr;
+		}
+
+		FreqList& operator=(const FreqList& other) = delete;
+		FreqList& operator=(FreqList&& other)
+		{
+			if ( this != &other ) 
+			{
+				clear_list();
+				first_elem_ = other.first_elem_;
+				other.first_elem_ = nullptr;
+			}
+			return *this;
+		}
+
+		~FreqList()
+		{
+			clear_list();
+		}
+	}
 
 	size_t size_ = 0;
 	size_t capacity_ = 10;

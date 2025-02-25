@@ -19,9 +19,11 @@ namespace test_cache {
 
 int main()
 {
-	size_t capacity;
-	int elem;
-	size_t hits = 0;
+	using KeyValueT = int;
+
+	size_t capacity{};
+	size_t hits{};
+	KeyValueT elem{};
 
 	std::cin >> capacity;
 	caches::LFUCache<int, int> cache(capacity);
