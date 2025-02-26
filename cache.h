@@ -32,18 +32,15 @@ class LFUCache
 
 	struct FreqNode 
 	{
-		unsigned value = 0;
+		unsigned value;
 		FreqNode *prev = nullptr;
 		FreqNode *next = nullptr;
 		std::set<KeyT> keys;
-	public:
-		FreqNode(unsigned value, FreqNode *prev, FreqNode *next) : value(value), prev(prev), next(next) 
-		{
-			if (prev != nullptr)
-				prev->next = this;
-			if (next != nullptr)
-				next->prev = this;
-		}
+
+		//TODO check for call for ctor without params
+		FreqNode(unsigned value) : value(value) {}
+
+		/* BIG 5*/
 		FreqNode(const FreqNode& other) = delete;
 		FreqNode(FreqNode&& other) = delete;
 		FreqNode& operator=(const FreqNode& other) = delete;
@@ -58,11 +55,11 @@ class LFUCache
 		void clear_list()
 		{
 			FreqNode *tmp;
-			while (first_elem != nullptr)
+			while (first_elem_ != nullptr)
 			{
-				tmp = first_elem;
-				first_elem = tmp->next;
-				delete tmp
+				tmp = first_elem_;
+				first_elem_ = tmp->next;
+				delete tmp;
 			}
 		}
 
@@ -92,47 +89,77 @@ class LFUCache
 		{
 			clear_list();
 		}
-	}
+
+#if 0
+		FreqNode *get_new_freq_node(unsigned value, FreqNode *prev, FreqNode *next)
+		{
+			FreqNode *new_node;
+
+			if (prev != nullptr)
+				assert(prev->next == next);
+			if (next != nullptr)
+				assert(next->prev == prev);
+			
+			return new FreqNode(value, prev, next);
+		}
+#endif
+
+		bool is_empty()
+		{
+			return first_elem_ == nullptr;
+		}
+
+		FreqNode* pop_front() // CONST наверное не нужен
+		{
+			return first_elem_;
+		}
+
+		void push_front(FreqNode* node)
+		{
+			node->next = first_elem_;
+			node->prev = nullptr;
+			first_elem_ = node;
+		}
+
+		FreqNode *insert_node(FreqNode *node, FreqNode *prev)
+		{
+			assert(prev != nullptr);
+			node->prev = prev;
+			node->next = prev->next;
+			prev->next = node;
+			return node;
+		}
+
+		void delete_node(FreqNode *node) {
+			FreqNode *next = node->next, *prev = node->prev;
+			
+			if (prev != nullptr)
+				prev->next = next;
+			if (next != nullptr)
+				next->prev = prev;
+			
+			if (first_elem_ == node)
+				first_elem_ = node->next;
+
+			delete node;
+		}
+
+	};
 
 	size_t size_ = 0;
 	size_t capacity_ = 10;
-	std::unordered_map<KeyT, LFUItem> table;
-	FreqNode *freq_head_ = nullptr;
+	std::unordered_map<KeyT, LFUItem> table_;
+	FreqList freq_list_;
 
-	FreqNode *get_new_freq_node(unsigned value, FreqNode *prev, FreqNode *next)
+	void delete_lfu_elem()
 	{
-		FreqNode *new_node;
-
-		if (prev != nullptr)
-			assert(prev->next == next);
-		if (next != nullptr)
-			assert(next->prev == prev);
-		
-		return new FreqNode(value, prev, next);
-	}
-
-	void *delete_freq_node(FreqNode *node) {
-		FreqNode *next = node->next, *prev = node->prev;
-		
-		if (node->prev != nullptr)
-			node->prev->next = next;
-		if (node->next != nullptr)
-			node->next->prev = prev;
-		delete node;
-
-		return next;
-	}
-
-	void pop_lfu_elem()
-	{
-		auto key = *(freq_head_->keys.begin());
-		freq_head_->keys.erase(key);
-		table.erase(key);
-		if (freq_head_->keys.empty())
+		FreqNode *first_elem = freq_list_.pop_front(); 
+		auto key = *(first_elem->keys.begin());
+		first_elem->keys.erase(key);
+		table_.erase(key);
+		if (first_elem->keys.empty())
 		{
-			FreqNode *next = freq_head_->next;
-			delete_freq_node(freq_head_);
-			freq_head_ = next;
+			freq_list_.delete_node(first_elem);
 		}
 	}
 
@@ -147,8 +174,9 @@ public:
 	std::string traverse()
 	{
 		std::string res;
-		FreqNode *p = freq_head_;
+		FreqNode *p = freq_list_.pop_front();
 
+		res += "***************************************\n";
 		while (p != nullptr)
 		{
 			res += "---------\n";
@@ -160,13 +188,14 @@ public:
 			res += "\n---------\n";
 			p = p->next;
 		}
+		res += "***************************************\n";
 		return res;
 	}
 #endif
 
 	bool contains(KeyT key)
 	{
-		if (table.find(key) != table.end())
+		if (table_.find(key) != table_.end())
 			return true;
 		return false;
 	}
@@ -180,25 +209,28 @@ public:
 
 		if (size_ == capacity_) 
 		{
-			pop_lfu_elem();
-		} else {
+			delete_lfu_elem();
+		} else 
+		{
 			size_++;
 		}
 
-		if (freq_head_ == nullptr || freq_head_->value != 1)
+
+		if (freq_list_.is_empty() || freq_list_.pop_front()->value != 1)
 		{
-			freq_head_ = get_new_freq_node(1, nullptr, freq_head_);
+			freq_list_.push_front(new FreqNode{1});
 		}
-		freq_head_->keys.insert(key);
-		table.insert({key, LFUItem(value, freq_head_)});
+		FreqNode *node = freq_list_.pop_front();
+		node->keys.insert(key);
+		table_.insert({key, LFUItem(value, node)});
 	}
 
 	ValueT get(KeyT key) 
 	{
 		FreqNode *freq, *next_freq;
 
-		auto it = table.find(key);
-		if (it == table.end())
+		auto it = table_.find(key);
+		if (it == table_.end())
 		{
 			throw std::invalid_argument("Key not found");
 		}
@@ -208,7 +240,7 @@ public:
 		next_freq = freq->next;
 		if (next_freq == nullptr || next_freq->value != freq->value + 1)
 		{
-			next_freq = get_new_freq_node(freq->value + 1, freq, next_freq);
+			next_freq = freq_list_.insert_node(new FreqNode{freq->value + 1}, freq);
 		}
 		next_freq->keys.insert(key);
 		item.parent = next_freq;
@@ -216,25 +248,11 @@ public:
 		freq->keys.erase(key);
 		if (freq->keys.empty())
 		{
-			delete_freq_node(freq);
-			if (freq_head_ == freq)
-			{
-				freq_head_ = next_freq;
-			}
+			freq_list_.delete_node(freq);
 		}
 		return item.value;
 	}
 
-	~LFUCache()
-	{
-		FreqNode *elem;
-
-		while (freq_head_ != nullptr)
-		{
-			elem = freq_head_;
-			freq_head_ = elem->next;
-			delete elem;
-		}
-	}
+	~LFUCache() = default;
 };
 }

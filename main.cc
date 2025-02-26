@@ -1,18 +1,26 @@
 #include <iostream>
+
+#define DEBUG
+
 #include "cache.h"
 
 namespace test_cache {
 	template <typename KeyT, typename ValueT>
 	bool lookup_update(caches::LFUCache<KeyT, ValueT> &cache, int key)
 	{
-		if (!cache.contains(key)) {
+		bool res = true;
+		if (!cache.contains(key)) 
+		{
+			res = false;
 			cache.insert(key, key);
-			std::cout << cache.traverse();
-			return false;
+		} else
+		{
+			cache.get(key); // we don't need this value
 		}
-		cache.get(key); // we don't need this value
+#ifdef DEBUG
 		std::cout << cache.traverse();
-		return true;
+#endif /* DEBUG */
+		return res;
 	}
 }
 
